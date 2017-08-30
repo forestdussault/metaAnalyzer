@@ -18,35 +18,15 @@ def retrieve_id_list(list_of_ids):
     return content
 
 
-# Probably don't need to do this again
-# def delete_extraneous_files(mgrast_download_folder):
-#     """
-#     Deletes everything that is not a .fastq.gz file in the passed in folder
-#     """
-#     for file in os.listdir(mgrast_download_folder):
-#         if 'upload.fastq.gz' in file:
-#             print('Keeping %s ...' % file)
-#             pass
-#         else:
-#             print('Deleting %s ...' % file)
-#
-#             try:
-#                 os.remove((mgrast_download_folder + '/' + file))
-#             except:
-#                 print('Could not delete %s. Skipping.' % file)
-#                 pass
-
-
 def usearch_global(fastq_filename):
     """
     Run vsearch on a fastq file. No limit to # of hits. Minimum 80% identity.
     """
-    mgrast_id = fastq_filename[:9]
-    query_target = MGRAST_DOWNLOAD_PATH + mgrast_id + '/' + fastq_filename
-    ref_db = ROOT_PATH+DATABASE_PATH
+    query_target = fastq_filename
+    ref_db = ROOT_PATH + DATABASE_PATH
     p = Popen('vsearch --usearch_global {0} --db {1} '
               ' --id 0.8 --maxaccepts 0 --samout {2}.sam'.format(query_target, ref_db, fastq_filename),
-              # wd=self.mg_rast_tools,
+              #wd=os.path.dirname(fastq_filename),
               shell=True,
               executable="/bin/bash")
     p.wait()
@@ -61,14 +41,12 @@ def fastq2fasta(fastq_filename):
     if '.filtered' in fastq_filename:
         fasta_filename = fastq_filename.replace('.fastq.gz', '.fasta')
 
-        try:
-            p = Popen('vsearch --fastq_filter {0} -fastaout {1}'.format(fastq_filename, fasta_filename),
-                      cwd=MGRAST_DOWNLOAD_PATH + fastq_filename[:9],
-                      shell=True,
-                      executable='/bin/bash')
-            p.wait()
-        except:
-            print('Could not start fastq -> fasta conversion.')
+        p = Popen('vsearch --fastq_filter {0} -fastaout {1}'.format(fastq_filename, fasta_filename),
+                  cwd=os.path.dirname(fastq_filename),
+                  shell=True,
+                  executable='/bin/bash')
+        p.wait()
+
     else:
         print('No filtered fastq file provided. Skipping %s' % fastq_filename)
         pass
@@ -81,19 +59,16 @@ def quality_trim(fastq_filename):
     Minimum length of 75 to replicate Pal et al. (2016)
     """
     fastq_filename_filtered = fastq_filename.replace('.fastq.gz', '.filtered.fastq.gz')
-    mgrast_id = fastq_filename[:9]
-    filepath_in = MGRAST_DOWNLOAD_PATH + mgrast_id + '/' + fastq_filename
-    filepath_out = MGRAST_DOWNLOAD_PATH + mgrast_id + '/' + fastq_filename_filtered
-    try:
-        # Quality-trim to Q10 using Phred algorithm with BBDuk. Trims left and right sides of reads.
-        p = Popen('./bbduk.sh -Xmx1g in={0} out={1} qtrim=rl trimq=10 '
-                  'minlen=75 overwrite=true'.format(filepath_in, filepath_out),
-                  cwd=BBDUK_PATH,
-                  shell=True,
-                  executable='/bin/bash')
-        p.wait()
-    except:
-        print('Could not start BBDuk quality trimming.')
+    filepath_in = fastq_filename
+    filepath_out = fastq_filename_filtered
+
+    # Quality-trim to Q10 using Phred algorithm with BBDuk. Trims left and right sides of reads.
+    p = Popen('./bbduk.sh -Xmx1g in={0} out={1} qtrim=rl trimq=10 '
+              'minlen=75 overwrite=true'.format(filepath_in, filepath_out),
+              cwd=BBDUK_PATH,
+              shell=True,
+              executable='/bin/bash')
+    p.wait()
 
 
 def run(id_list, myfunc):
@@ -113,7 +88,7 @@ def run(id_list, myfunc):
 
 def run_genesippr(id_list):
     """
-    TODO: Starts the genesipprv2 docker container then runs against an ID list
+    TODO: Starts the genesippr docker container then runs against an ID list
     """
     # docker run -it -v /mnt/nas:/mnt/nas genesipprv2
     # python3 genesippr.py /mnt/nas/Forest/MG-RAST_Dataset_Analysis/
@@ -125,8 +100,5 @@ print(id_list)
 
 # run(id_list, quality_trim)
 
-# testing fastq2fasta function
-    # should fail
-fastq2fasta('/mnt/nas/bio_requests/9343/testing123/testing.fastq.gz')
-    # should work
-fastq2fasta('/mnt/nas/bio_requests/9343/testing123/testing.filtered.fastq.gz')
+#fastq2fasta('/mnt/nas/bio_requests/9343/4569599.3/4569599.3.050.upload.filtered.fastq.gz')
+usearch_global('/mnt/nas/bio_requests/9343/4569599.3/4569599.3.050.upload.filtered.fasta')
