@@ -1,14 +1,14 @@
 import os
-from subprocess import Popen, check_call
+from subprocess import Popen
 
-from config import DATABASE_PATH, CARB_DB_PATH, DATA_ANALYSIS_PATH
+from config import AMR_DB_PATH, CARB_DB_PATH, DATA_ANALYSIS_PATH
 
 def usearch_global(fasta_filename):
     """
     Run vsearch on a fastq file. No limit to # of hits. Minimum 80% identity.
     """
     query_target = fasta_filename
-    ref_db = DATABASE_PATH
+    ref_db = AMR_DB_PATH
     p = Popen('vsearch --usearch_global {0} --db {1} '
               ' --id 0.8 --maxaccepts 0 --samheader --samout {2}'.format(query_target, CARB_DB_PATH, fasta_filename.replace('.fasta','.sam')),
               shell=True,

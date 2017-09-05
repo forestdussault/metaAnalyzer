@@ -1,12 +1,13 @@
 import os
 import docker
+import shutil
 
 from glob import glob
 from subprocess import Popen
 
-from config import DATABASE_PATH, \
-    MGRAST_DOWNLOAD_PATH,\
-    BBDUK_PATH
+from config import AMR_DB_PATH, \
+    MGRAST_DOWNLOAD_PATH, \
+    BBMAP_TOOLS_PATH
 
 
 def retrieve_id_list(list_of_ids):
@@ -52,7 +53,7 @@ def quality_trim(fastq_filename):
     # Quality-trim to Q10 using Phred algorithm with BBDuk. Trims left and right sides of reads.
     p = Popen('./bbduk.sh -Xmx1g in={0} out={1} qtrim=rl trimq=10 '
               'minlen=75 overwrite=true'.format(filepath_in, filepath_out),
-              cwd=BBDUK_PATH,
+              cwd=BBMAP_TOOLS_PATH,
               shell=True,
               executable='/bin/bash')
     p.wait()
@@ -143,3 +144,15 @@ def mass_sipp(id_list):
                       sequence_path='/mnt/nas/Forest/MG-RAST_Dataset_Analysis/metagenomes/{}'.format(id),
                       target_path='/mnt/nas/Forest/MG-RAST_Dataset_Analysis/db')
 
+def clean_folder(parent_folder):
+    # Delete everything that isn't .filtered.fastq.gz (including folders)
+    for item in os.listdir(parent_folder):
+        if item.endswith('.filtered.fastq.gz'):
+            print('Skipping %s ...' % item)
+        else:
+            print('Deleting %s ...' % item)
+
+            if os.path.isdir(parent_folder + '/' + item):
+                shutil.rmtree(parent_folder + '/' +item)
+            else:
+                os.remove(parent_folder + '/' +item)
