@@ -29,7 +29,6 @@ def bbmap_search_sensitive(fastq_filename, ref_db_fasta):
               'showprogress=2000000 ' # add progress dotter
               'slow ' # high sensitivity
               'k=12 '
-              #'minid=0.9 ' # Can set minimum identity cutoff. Default is 0.76.
               'trd ' # force old-style cigar strings for compatibility reasons
               'sam=1.3 '
               'covstats={3} ' # produce statistics
@@ -76,8 +75,64 @@ def bbmap_search_fast(fastq_filename, ref_db_fasta):
               'covhist={5} '
               'basecov={6} '
               'bincov={7} '
-              'scafstats={8}'.format(fastq_filename,sam_filename_aligned, sam_filename_unaligned, ref_db_fasta,
+              'scafstats={8} '
+              'bs=bs.sh; sh bs.sh' # sort the BAM file
+              ''.format(fastq_filename,sam_filename_aligned, sam_filename_unaligned, ref_db_fasta,
                                      covstats, covhist, basecov, bincov, scafstats),
+              cwd=BBMAP_TOOLS_PATH,
+              shell=True,
+              executable="/bin/bash")
+    p.wait()
+
+def bbmap_search_fast_paired(fastq_r1,fastq_r2, ref_db_fasta):
+    """
+    Mapping according to B. Bushnell's recommendation for parameters for
+    "very high precision and lower sensitivity, as when removing contaminant
+    reads specific to a genome without risking false-positives" (see BBMap Guide)
+    """
+    if fastq_r1.endswith('.fastq.gz') and fastq_r2.endswith('.fastq.gz'):
+        sam_output = fastq_r1.replace('.fastq.gz','.aligned.sam')
+    elif fastq_r1.endswith('.fastq'):
+        sam_output = fastq_r1.replace('.fastq','.aligned.sam')
+    else:
+        print('Invalid input files')
+        return None
+
+    base_fastq = os.path.basename(fastq_r1)
+    wd = os.path.dirname(fastq_r1)
+    covstats = '{0}/{1}_covstats.txt'.format(wd,base_fastq)
+    covhist = '{0}/{1}_covhist.txt'.format(wd,base_fastq)
+    bincov = '{0}/{1}_bincov.txt'.format(wd,base_fastq)
+    scafstats = '{0}/{1}_scafstats.txt'.format(wd,base_fastq)
+    basecov = '{0}/{1}_basecov.txt'.format(wd,base_fastq)
+
+    p = Popen('./bbmap.sh in1={0} '
+              'in2={1} '
+              'out={2} '
+              'ref={3} '
+              'nodisk ' # don't write ref. index to disk -> keep index in memory
+              'showprogress=2000000 ' # add progress dotter
+              'fast ' # all of the following parameters up til covstats are for high precision/low sensitivity...
+              'minratio=0.9 '
+              'maxindel=3 '
+              'bwr=0.16 '
+              'minhits=2 '
+              'qtrim=r '
+              'trimq=10 '
+              'untrim '
+              'idtag '
+              'printunmappedcount '
+              'kfilter=25 '
+              'maxsites=1 '
+              'k=14 '
+              'covstats={4} ' # produce statistics
+              'covhist={5} '
+              'bincov={6} '
+              'scafstats={7} '
+              'basecov={8} '
+              'bs=bs.sh; sh bs.sh' # sort the BAM file
+              ''.format(fastq_r1,fastq_r2,sam_output, ref_db_fasta,
+                                     covstats, covhist, bincov, scafstats, basecov),
               cwd=BBMAP_TOOLS_PATH,
               shell=True,
               executable="/bin/bash")
@@ -91,9 +146,13 @@ def metagenome_paths(parent_folder):
 
 
 # Grab all of the dataset IDs
-metagenome_path_list = metagenome_paths('/mnt/nas/Forest/MG-RAST_Dataset_Analysis/metagenomes')
+# metagenome_path_list = metagenome_paths('/mnt/nas/Forest/MG-RAST_Dataset_Analysis/metagenomes')
 
 # Search all datasets (see bbmap_results_analysis.ipynb for results) with the AMR db
-for metagenome_path in metagenome_path_list:
-    bbmap_search_sensitive(metagenome_path,
-                 CARB_DB_PATH)
+# for metagenome_path in metagenome_path_list:
+#     bbmap_search_sensitive(metagenome_path,
+#                  CARB_DB_PATH)
+
+bbmap_search_fast_paired('/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_1.filtered.fastq.gz',
+                         '/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_2.filtered.fastq.gz',
+                         '/mnt/scratch/Forest/SRA_carrot_project/genomes/carrot/GCF_001625215.1_ASM162521v1_genomic.fna')
