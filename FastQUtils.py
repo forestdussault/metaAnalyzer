@@ -8,64 +8,6 @@ import shutil
 
 class FastQUtils(object):
 
-    def fastq2fasta_bbduk(self):
-        """
-        Converts .fastq to .fasta. Should be done downstream of quality filtering.
-        Should probably deprecate this since the BBTools suite is flexible enough handle compressed/uncompressed files
-        """
-        print('\nConverting %s to fasta via --fastq_filter ...\n' % self.fastq_filenames)
-
-        if '.filtered' in self.fastq_filenames:
-            fasta_filename = self.fastq_filenames.replace('.fastq.gz', '.fasta')
-
-            # Run VSearch
-            p = subprocess.Popen('vsearch '
-                                 '--fastq_filter {0} '
-                                 '-fastaout {1}'.format(self.fastq_filenames, fasta_filename),
-                                 cwd=os.path.dirname(self.fastq_filenames),
-                                 shell=True,
-                                 executable='/bin/bash')
-            p.wait()
-
-        else:
-            print('No filtered FastQ file provided. Skipping %s' % self.fastq_filenames)
-            pass
-
-    @staticmethod
-    def run_dedupe(read1, read2):
-        """
-        Run this after filtering. Deduplicates sequences. Requires lots of memory.
-        http://seqanswers.com/forums/archive/index.php/t-39270.html
-        """
-        print('\nRunning dedupe on {0} and {1}...\n'.format(read1, read2))
-
-        # Setup filenames
-        dedupe_out_1 = read1.replace('.filtered', '.dereplicated.filtered')
-        dedupe_out_2 = read2.replace('.filtered', '.dereplicated.filtered')
-        interleaved_out = read1.replace('.filtered', '.temp.interleaved')
-
-        # Run dedupe
-        p = subprocess.Popen('dedupe.sh '
-                             'in1={0} '
-                             'in2={1} '
-                             'out={2} '
-                             'maxsubs=0 '
-                             'ac=f '.format(read1, read2, interleaved_out),
-                             shell=True,
-                             executable='/bin/bash')
-        p.wait()
-
-        # Deinterleave the output file
-        print('\nDeinterleaving...')
-        p = subprocess.Popen('reformat.sh '
-                             'in={0} '
-                             'out1={1} '
-                             'out2={2} '.format(interleaved_out, dedupe_out_1, dedupe_out_2))
-        p.wait()
-
-        # Return the output filenames
-        return dedupe_out_1, dedupe_out_2
-
     def quality_trim_bbduk(self):
         """
         Quality trimming with BBDuk
@@ -89,7 +31,7 @@ class FastQUtils(object):
                                  'trimq=20 '  # Quality-trim to Q20 using Phred algorithm with BBDuk.
                                  'ktrim=r '  # adapter sequences sourced from /bbduk/resources/ should be trimmed from right
                                  'ref={2}/resources/adapters.fa '  # remove adapter sequences
-                                 'ktrim=r ' 
+                                 'ktrim=r '
                                  'minlen=100 '
                                  'overwrite=true '
                                  'k=23 '  # 23-mers for matching in main portion of read
@@ -118,7 +60,7 @@ class FastQUtils(object):
             filepath_out_r2 = fastq_filename_filtered_r2
 
             stats_out = filepath_out_r1.replace('.fastq.gz', '.paired.stats.txt')
-            
+
             # Run BBDuk
             p = subprocess.Popen('bbduk.sh -Xmx1g '
                                  'in1={0} in2={1} '
@@ -126,21 +68,65 @@ class FastQUtils(object):
                                  'qtrim=r '
                                  'trimq=20 '
                                  'ktrim=r '  # adapter sequences sourced from /bbduk/resources/ should be trimmed from right
-                                 'tbo ' 
+                                 'tbo '
                                  'tpe '  # trim both read1 and read2
                                  'k=23 '
                                  'ref={4}/resources/adapters.fa '
                                  'minlen=100 '
                                  'overwrite=true '
-                                 'stats={5} '
+                                 'stats={5}'
                                  ''.format(filepath_in_r1, filepath_in_r2, filepath_out_r1, filepath_out_r2,
                                            self.bbduk_dir, stats_out),
                                  shell=True,
                                  executable='/bin/bash')
             p.wait()
-            
+
             # Return the output files
             return filepath_out_r1, filepath_out_r2
+
+    @staticmethod
+    def run_dedupe(read1, read2):
+        """
+        Run this after filtering. Deduplicates sequences. Requires lots of memory.
+        http://seqanswers.com/forums/archive/index.php/t-39270.html
+        """
+        print('\nRunning dedupe on {0} and {1}...\n'.format(read1, read2))
+
+        # Setup temp output
+        interleaved_out = read1.replace('.filtered', '.temp.interleaved')
+
+        # Run dedupe
+        p = subprocess.Popen('dedupe.sh '
+                             'in1={0} '
+                             'in2={1} '
+                             'out={2} '
+                             'maxsubs=0 '
+                             'k=31 '
+                             'ac=f '
+                             'overwrite=true'.format(read1, read2, interleaved_out),
+                             shell=True,
+                             executable='/bin/bash')
+        p.wait()
+
+        # Setup final output
+        dedupe_out_1 = read1.replace('.filtered', '.dereplicated.filtered')
+        dedupe_out_2 = read2.replace('.filtered', '.dereplicated.filtered')
+
+        # Deinterleave the output file
+        print('\nDeinterleaving...')
+        p2 = subprocess.Popen('reformat.sh '
+                             'in={0} '
+                             'out1={1} '
+                             'out2={2}'.format(interleaved_out, dedupe_out_1, dedupe_out_2),
+                              shell=True,
+                              executable='/bin/bash')
+        p2.wait()
+
+        # Cleanup
+        os.remove(interleaved_out)
+
+        # Return the output filenames
+        return dedupe_out_1, dedupe_out_2
 
     def run_fastqc(self, read1=None, read2=None):
         """
@@ -196,7 +182,7 @@ class FastQUtils(object):
             shutil.move((self.workdir + '/' + os.path.basename(file)), self.workdir + '/FastQC/' + os.path.basename(file))
 
     def __init__(self, args):
-        print('\033[92m' + '\033[1m' + '\nBBMAP TOOLS WRAPPER\n' + '\033[0m')
+        print('\033[92m' + '\033[1m' + '\nFASTQ UTILS\n' + '\033[0m')
 
         # Arguments
         self.args = args
@@ -228,7 +214,7 @@ class FastQUtils(object):
                   'Exiting.')
             quit()
 
-        # Run BBDuk and then FastQC on the fastq pair
+        # Run methods
         # -qt -dr -fc
         if self.qualitytrim and self.fastqc and self.dereplicate:
             print('\033[92m' + '\033[1m' + '\nRunning BBDuk ==> Dereplication ==> FastQC pipeline... ' + '\033[0m')
@@ -255,7 +241,7 @@ if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser()
     parser.add_argument('fastq_filenames',
-                        help='Path to the FastQ file you would like to perform QC functions on. '
+                        help='Path to the FastQ file(s) you would like to perform QC functions on. '
                              'Enter two reads for pairs i.e. /path/read1.fastq /path/read2.fastq.', nargs='*')
     parser.add_argument('-fa', '--fasta',
                         default=False,
