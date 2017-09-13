@@ -108,6 +108,7 @@ class BBMapper(object):
         """
         Generate abundance measurements
         """
+        print('\nRunning Seal...')
         if pergene is None:
             refnames = 't'
         elif pergene is True:
@@ -134,6 +135,9 @@ class BBMapper(object):
 
 
     def __init__(self, args):
+        print('\033[92m' + '\033[1m' + '\nBBMAPPER' + '\033[0m')
+
+        # Get args
         self.args = args
 
         # Required input
@@ -189,9 +193,8 @@ if __name__ == '__main__':
     parser.add_argument('fastq_filenames',
                         help='Path to the FastQ file(s) you would like to perform BBMap functions on. '
                              'Enter two reads for pairs i.e. /path/read1.fastq /path/read2.fastq.',
-                        nargs='*',
-                        required=True)
-    parser.add_argument('-db', '--ref-db',
+                        nargs='*')
+    parser.add_argument('-db', '--refdb',
                         help='Specify the path to the reference database you would like to query against.',
                         required=True)
     parser.add_argument('-s', '--seal',

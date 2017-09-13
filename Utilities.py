@@ -58,9 +58,9 @@ def setup_symlinks():
 
 
 def clean_folder(parent_folder):
-    # Delete everything that isn't .filtered.fastq.gz (including folders)
+    # Delete everything that isn't .fastq.gz (including folders)
     for item in os.listdir(parent_folder):
-        if item.endswith('.filtered.fastq.gz'):
+        if item.endswith('.fastq.gz'):
             print('Skipping %s ...' % item)
         else:
             print('Deleting %s ...' % item)

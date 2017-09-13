@@ -62,7 +62,7 @@ class FastQUtils(object):
             stats_out = filepath_out_r1.replace('.fastq.gz', '.paired.stats.txt')
 
             # Run BBDuk
-            p = subprocess.Popen('bbduk.sh -Xmx1g '
+            p = subprocess.Popen('bbduk.sh -Xmx4g '
                                  'in1={0} in2={1} '
                                  'out1={2} out2={3} '
                                  'qtrim=r '
@@ -182,7 +182,7 @@ class FastQUtils(object):
             shutil.move((self.workdir + '/' + os.path.basename(file)), self.workdir + '/FastQC/' + os.path.basename(file))
 
     def __init__(self, args):
-        print('\033[92m' + '\033[1m' + '\nFASTQ UTILS\n' + '\033[0m')
+        print('\033[92m' + '\033[1m' + '\nFASTQ UTILS' + '\033[0m')
 
         # Arguments
         self.args = args
