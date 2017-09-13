@@ -1,172 +1,241 @@
 import os
-import glob
 import subprocess
+import time
+import argparse
+
+class BBMapper(object):
+
+    def bbmap_sensitive(self, fastq_filename, ref_db_fasta):
+
+        if fastq_filename.endswith('.fastq.gz'):
+            sam_filename = fastq_filename.replace('.fastq.gz', '.sam')
+        elif fastq_filename.endswith('.fastq'):
+            sam_filename = fastq_filename.replace('.fastq', '.sam')
+        else:
+            print('Invalid input file')
+            return None
+
+        base_fastq = os.path.basename(fastq_filename)
+        rast_id = base_fastq[:9]
+        wd = os.path.dirname(fastq_filename)
+        covstats = '{0}/{1}_covstats.txt'.format(wd, rast_id)
+        covhist = '{0}/{1}_covhist.txt'.format(wd, rast_id)
+        basecov = '{0}/{1}_basecov.txt'.format(wd, rast_id)
+        bincov = '{0}/{1}_bincov.txt'.format(wd, rast_id)
+
+        p = subprocess.Popen('bbmap.sh in={0} '
+                             'outm={1} '  # outm to only show mapped alignments
+                             'ref={2} '
+                             'nodisk '
+                             'showprogress=2000000 '  # add progress dotter
+                             'slow '  # high sensitivity
+                             'k=12 '
+                             'trd '  # force old-style cigar strings for compatibility reasons
+                             'sam=1.3 '
+                             'covstats={3} '  # produce statistics
+                             'covhist={4} '
+                             'basecov={5} '
+                             'bincov={6}'.format(fastq_filename,
+                                                 sam_filename,
+                                                 ref_db_fasta,
+                                                 covstats,
+                                                 covhist,
+                                                 basecov,
+                                                 bincov),
+                             shell=True,
+                             executable="/bin/bash")
+        p.wait()
 
 
-def bbmap_search_sensitive(fastq_filename, ref_db_fasta):
+    def bbmap_fast_paired(self):
+        """
+        Mapping according to B. Bushnell's recommendation for parameters for
+        "very high precision and lower sensitivity, as when removing contaminant
+        reads specific to a genome without risking false-positives" (see BBMap Guide)
+        """
+        if self.read1.endswith('.fastq.gz') and self.read2.endswith('.fastq.gz'):
+            sam_output = self.read1.replace('.fastq.gz', '.aligned.sam')
+        elif self.read1.endswith('.fastq'):
+            sam_output = self.read1.replace('.fastq', '.aligned.sam')
+        else:
+            print('Invalid input files')
+            return None
 
-    if fastq_filename.endswith('.fastq.gz'):
-        sam_filename = fastq_filename.replace('.fastq.gz', '.sam')
-    elif fastq_filename.endswith('.fastq'):
-        sam_filename = fastq_filename.replace('.fastq', '.sam')
-    else:
-        print('Invalid input file')
-        return None
+        base_fastq = os.path.basename(self.read1)
 
-    base_fastq = os.path.basename(fastq_filename)
-    rast_id = base_fastq[:9]
-    wd = os.path.dirname(fastq_filename)
-    covstats = '{0}/{1}_covstats.txt'.format(wd, rast_id)
-    covhist = '{0}/{1}_covhist.txt'.format(wd, rast_id)
-    basecov = '{0}/{1}_basecov.txt'.format(wd, rast_id)
-    bincov = '{0}/{1}_bincov.txt'.format(wd, rast_id)
+        covstats = '{0}/{1}_covstats.txt'.format(self.workdir, base_fastq)
+        covhist = '{0}/{1}_covhist.txt'.format(self.workdir, base_fastq)
+        bincov = '{0}/{1}_bincov.txt'.format(self.workdir, base_fastq)
+        scafstats = '{0}/{1}_scafstats.txt'.format(self.workdir, base_fastq)
+        basecov = '{0}/{1}_basecov.txt'.format(self.workdir, base_fastq)
 
-    p = subprocess.Popen('bbmap.sh in={0} '
-                         'outm={1} '  # outm to only show mapped alignments
-                         'ref={2} '
-                         'nodisk '
-                         'showprogress=2000000 '  # add progress dotter
-                         'slow '  # high sensitivity
-                         'k=12 '
-                         'trd '  # force old-style cigar strings for compatibility reasons
-                         'sam=1.3 '
-                         'covstats={3} '  # produce statistics
-                         'covhist={4} '
-                         'basecov={5} '
-                         'bincov={6}'.format(fastq_filename,
-                                             sam_filename,
-                                             ref_db_fasta,
-                                             covstats,
-                                             covhist,
-                                             basecov,
-                                             bincov),
-                         shell=True,
-                         executable="/bin/bash")
-    p.wait()
+        p = subprocess.Popen('bbmap.sh '
+                             '-Xmx26g '  # pass to Java for memory detection.
+                             'in1={0} '
+                             'in2={1} '
+                             'out={2} '
+                             'ref={3} '
+                             'nodisk '  # don't write ref. index to disk -> keep index in memory
+                             'showprogress=2000000 '  # add progress dotter
+                             'fast '  # all of the following parameters up til covstats are for high precision
+                             'minratio=0.9 '
+                             'maxindel=3 '
+                             'bwr=0.16 '
+                             'minhits=2 '
+                             'qtrim=r '
+                             'trimq=10 '
+                             'untrim '
+                             'idtag '
+                             'printunmappedcount '
+                             'kfilter=25 '
+                             'maxsites=1 '
+                             'k=14 '
+                             'covstats={4} '  # produce statistics
+                             'covhist={5} '
+                             'bincov={6} '
+                             'scafstats={7} '
+                             'basecov={8} '
+                             'bs=bs.sh; sh bs.sh'  # sort the BAM file
+                             ''.format(self.read1, self.read2, sam_output, self.refdb,
+                                       covstats, covhist, bincov, scafstats, basecov),
+                             shell=True,
+                             executable="/bin/bash")
 
-
-def bbmap_search_fast(fastq_filename, ref_db_fasta):
-
-    if fastq_filename.endswith('.fastq.gz'):
-        sam_filename_aligned = fastq_filename.replace('.fastq.gz', '.aligned.sam')
-        sam_filename_unaligned = fastq_filename.replace('.fastq.gz', '.unaligned.sam')
-    elif fastq_filename.endswith('.fastq'):
-        sam_filename_aligned = fastq_filename.replace('.fastq', '.aligned.sam')
-        sam_filename_unaligned = fastq_filename.replace('.fastq', '.unaligned.sam')
-    else:
-        print('Invalid input file')
-        return None
-
-    base_fastq = os.path.basename(fastq_filename)
-    rast_id = base_fastq[:9]
-    wd = os.path.dirname(fastq_filename)
-    covstats = '{0}/{1}_covstats.txt'.format(wd, rast_id)
-    covhist = '{0}/{1}_covhist.txt'.format(wd, rast_id)
-    basecov = '{0}/{1}_basecov.txt'.format(wd, rast_id)
-    bincov = '{0}/{1}_bincov.txt'.format(wd, rast_id)
-    scafstats = '{0}/{1}_scafstats.txt'.format(wd, rast_id)
-
-    p = subprocess.Popen('bbmap.sh in={0} '
-                         'outm={1} '
-                         'outu={2}'  # outm to only show mapped alignments
-                         'ref={3} '
-                         'nodisk '
-                         'showprogress=2000000 '  # add progress dotter
-                         'fast ' 
-                         'trd '  # force old-style cigar strings for compatibility reasons
-                         'sam=1.3 '
-                         'covstats={4} '  # produce statistics
-                         'covhist={5} '
-                         'basecov={6} '
-                         'bincov={7} '
-                         'scafstats={8} '
-                         'bs=bs.sh; sh bs.sh'  # sort the BAM file
-                         ''.format(fastq_filename,
-                                   sam_filename_aligned,
-                                   sam_filename_unaligned,
-                                   ref_db_fasta,
-                                   covstats,
-                                   covhist,
-                                   basecov,
-                                   bincov,
-                                   scafstats),
-                         shell=True,
-                         executable="/bin/bash")
-    p.wait()
+        p.wait()
 
 
-def bbmap_search_fast_paired(fastq_r1, fastq_r2, ref_db_fasta):
-    """
-    Mapping according to B. Bushnell's recommendation for parameters for
-    "very high precision and lower sensitivity, as when removing contaminant
-    reads specific to a genome without risking false-positives" (see BBMap Guide)
-    """
-    if fastq_r1.endswith('.fastq.gz') and fastq_r2.endswith('.fastq.gz'):
-        sam_output = fastq_r1.replace('.fastq.gz', '.aligned.sam')
-    elif fastq_r1.endswith('.fastq'):
-        sam_output = fastq_r1.replace('.fastq', '.aligned.sam')
-    else:
-        print('Invalid input files')
-        return None
+    def run_seal(self, pergene=None):
+        """
+        Generate abundance measurements
+        """
+        if pergene is None:
+            refnames = 't'
+        elif pergene is True:
+            refnames = 'f'
 
-    base_fastq = os.path.basename(fastq_r1)
-    wd = os.path.dirname(fastq_r1)
-    covstats = '{0}/{1}_covstats.txt'.format(wd, base_fastq)
-    covhist = '{0}/{1}_covhist.txt'.format(wd, base_fastq)
-    bincov = '{0}/{1}_bincov.txt'.format(wd, base_fastq)
-    scafstats = '{0}/{1}_scafstats.txt'.format(wd, base_fastq)
-    basecov = '{0}/{1}_basecov.txt'.format(wd, base_fastq)
+        base_fastq = os.path.basename(self.read1)
 
-    p = subprocess.Popen('bbmap.sh in1={0} '
-                         'in2={1} '
-                         'out={2} '
-                         'ref={3} '
-                         'nodisk '  # don't write ref. index to disk -> keep index in memory
-                         'showprogress=2000000 '  # add progress dotter
-                         'fast '  # all of the following parameters up til covstats are for high precision
-                         'minratio=0.9 '
-                         'maxindel=3 '
-                         'bwr=0.16 '
-                         'minhits=2 '
-                         'qtrim=r '
-                         'trimq=10 '
-                         'untrim '
-                         'idtag '
-                         'printunmappedcount '
-                         'kfilter=25 '
-                         'maxsites=1 '
-                         'k=14 '
-                         'covstats={4} '  # produce statistics
-                         'covhist={5} '
-                         'bincov={6} '
-                         'scafstats={7} '
-                         'basecov={8} '
-                         'bs=bs.sh; sh bs.sh'  # sort the BAM file
-                         ''.format(fastq_r1, fastq_r2, sam_output, ref_db_fasta,
-                                   covstats, covhist, bincov, scafstats, basecov),
-                         shell=True,
-                         executable="/bin/bash")
-    p.wait()
+        stats = '{0}/{1}_sealstats.txt'.format(self.workdir, base_fastq)
+        rpkm = '{0}/{1}_sealrpkm.txt'.format(self.workdir, base_fastq)
+
+        p = subprocess.Popen('seal.sh '
+                             'in1={0} '
+                             'in2={1} '
+                             'ref={2} '
+                             'stats={3} '
+                             'rpkm={4} '
+                             'ambig=random '
+                             'overwrite=true '
+                             'refnames={5}' # per ref. file instead of per target in ref. (set this to true for host DNA %)
+                             ''.format(self.read1, self.read2, self.refdb, stats, rpkm, refnames),
+                             shell=True,
+                             executable="/bin/bash")
+        p.wait()
 
 
-def metagenome_paths(parent_folder):
-    metagenome_folder_list = []
-    for filename in glob.glob(parent_folder + '/*/*.fastq.gz', recursive=True):
-        metagenome_folder_list.append(filename)
-    return metagenome_folder_list
+    def __init__(self, args):
+        self.args = args
+
+        # Required input
+        self.fastq_filenames = args.fastq_filenames
+        self.refdb = args.refdb
+
+        # Flags
+        self.pergene = args.pergene
+        self.seal = args.seal
+        self.pairedsensitive = args.pairedsensitive
+
+        # Metadata
+        self.num_reads = len(self.fastq_filenames)
+        self.workdir = os.path.dirname(self.fastq_filenames[0])
+
+        # Read setup
+        if self.num_reads == 1:
+            self.read1 = self.fastq_filenames[0]
+        elif self.num_reads == 2:
+            self.read1 = self.fastq_filenames[0]
+            self.read2 = self.fastq_filenames[1]
+        else:
+            print('Invalid number of reads entered. Exiting.')
+            quit()
+
+        # BBDuk directory grab
+        cmd = 'which bbduk.sh'
+        self.bbduk_dir = subprocess.check_output(cmd.split()).decode('utf-8')
+        self.bbduk_dir = self.bbduk_dir.split('/')[:-1]
+        self.bbduk_dir = '/'.join(self.bbduk_dir)
+
+        # User input validation
+        if self.pergene and self.seal:
+            print('Specified too many analysis types. Quitting.')
+            quit()
+        elif self.pergene and self.seal is False:
+            print('Must specify -s flag in order to use -pg flag. Quitting.')
+            quit()
+        else:
+            pass
+
+        # Run methods
+        if self.seal and self.pergene:
+            self.run_seal(pergene = self.pergene)
+        elif self.seal:
+            self.run_seal()
+        elif self.pairedsensitive:
+            self.bbmap_fast_paired()
+
+if __name__ == '__main__':
+    start = time.time()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('fastq_filenames',
+                        help='Path to the FastQ file(s) you would like to perform BBMap functions on. '
+                             'Enter two reads for pairs i.e. /path/read1.fastq /path/read2.fastq.',
+                        nargs='*',
+                        required=True)
+    parser.add_argument('-db', '--ref-db',
+                        help='Specify the path to the reference database you would like to query against.',
+                        required=True)
+    parser.add_argument('-s', '--seal',
+                        default=False,
+                        action='store_true',
+                        help='Runs seal.sh against the input read(s). '
+                             'Provides abundance estimates for gene targets or the reference DB treated as a whole. '
+                             'By default this will provide only one abundance value'
+                             'i.e. the abundance in % of the whole DB in your sample '
+                             'Add the -pg flag to provide abundance estimates per sequence in your reference DB.')
+    parser.add_argument('-pg', '--pergene',
+                        default=False,
+                        action='store_true',
+                        help='Modifier for the --seal flag '
+                             'Use this if your reference DB is a small set of genes of interest.')
+    parser.add_argument('-ps', '--pairedsensitive',
+                        default=False,
+                        action='store_true',
+                        help='Runs bbmap.sh against the input read(s). '
+                             'Very high precision and lower sensitivity BBMap search against reference DB.'
+                             'For removing contaminant reads specific to a metagenome.')
 
 
-# Grab all of the dataset IDs
-# metagenome_path_list = metagenome_paths('/mnt/nas/Forest/MG-RAST_Dataset_Analysis/metagenomes')
+    arguments = parser.parse_args()
 
-# Search all datasets (see bbmap_results_analysis.ipynb for results) with the AMR db
-# for metagenome_path in metagenome_path_list:
-#     bbmap_search_sensitive(metagenome_path,
-#                  CARB_DB_PATH)
+    x = BBMapper(arguments)
 
-bbmap_search_fast_paired('/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_1.filtered.fastq.gz',
-                         '/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_2.filtered.fastq.gz',
-                         '/mnt/scratch/Forest/SRA_carrot_project/genomes/cow/GCF_000003055.6_Bos_taurus_UMD_3.1.1_genomic.fna')
+    end = time.time()
+    m, s = divmod(end - start, 60)
+    h, m = divmod(m, 60)
+
+    # Bold green time courtesy of Adam and Andrew
+    print('\033[92m' + '\033[1m' + '\nFinished BBMapper functions in %d:%02d:%02d ' % (h, m, s) + '\033[0m')
+
+
+# run_seal('/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_1.filtered.fastq.gz',
+#                          '/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_2.filtered.fastq.gz',
+#                          '/mnt/scratch/Forest/SRA_carrot_project/genomes/carrot/GCF_001625215.1_ASM162521v1_genomic.fna')
+
+# AMR DB
+# '/mnt/nas/Forest/MG-RAST_Dataset_Analysis/databases/amr/amr_db_original.fasta'
 
 # Carrot
-# '/mnt/scratch/Forest/SRA_carrot_project/genomes/carrot/GCF_001625215.1_ASM162521v1_genomic.fna')
+# '/mnt/scratch/Forest/SRA_carrot_project/genomes/carrot/GCF_001625215.1_ASM162521v1_genomic.fna'
+
+# Cow
+# '/mnt/scratch/Forest/SRA_carrot_project/genomes/cow/GCF_000003055.6_Bos_taurus_UMD_3.1.1_genomic.fna'
