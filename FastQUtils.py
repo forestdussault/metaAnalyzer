@@ -115,9 +115,10 @@ class FastQUtils(object):
         # Deinterleave the output file
         print('\nDeinterleaving...')
         p2 = subprocess.Popen('reformat.sh '
-                             'in={0} '
-                             'out1={1} '
-                             'out2={2}'.format(interleaved_out, dedupe_out_1, dedupe_out_2),
+                              'in={0} '
+                              'out1={1} '
+                              'out2={2} '
+                              'overwrite=true'.format(interleaved_out, dedupe_out_1, dedupe_out_2),
                               shell=True,
                               executable='/bin/bash')
         p2.wait()
@@ -220,7 +221,7 @@ class FastQUtils(object):
             print('\033[92m' + '\033[1m' + '\nRunning BBDuk ==> Dereplication ==> FastQC pipeline... ' + '\033[0m')
             read1_filtered, read2_filtered = self.quality_trim_bbduk()
             read1_deduped, read2_deduped = self.run_dedupe(read1_filtered, read2_filtered)
-            self.run_fastqc(read1=read1_deduped,read2=read2_deduped)
+            self.run_fastqc(read1=read1_deduped, read2=read2_deduped)
         # -qt -fc
         elif self.qualitytrim and self.fastqc:
             print('\033[92m' + '\033[1m' + '\nRunning BBDuk ==> FastQC pipeline...' + '\033[0m')
@@ -228,7 +229,7 @@ class FastQUtils(object):
             self.run_fastqc(read1=read1_filtered, read2=read2_filtered)
         # -qt
         elif self.qualitytrim:
-            self.qualitytrim()
+            self.quality_trim_bbduk()
         # -fc
         elif self.fastqc:
             self.run_fastqc()
