@@ -3,25 +3,25 @@ import subprocess
 import time
 import argparse
 
+
 class BBMapper(object):
 
-    def bbmap_sensitive(self, fastq_filename, ref_db_fasta):
+    def bbmap_sensitive(self):
 
-        if fastq_filename.endswith('.fastq.gz'):
-            sam_filename = fastq_filename.replace('.fastq.gz', '.sam')
-        elif fastq_filename.endswith('.fastq'):
-            sam_filename = fastq_filename.replace('.fastq', '.sam')
+        if self.read1.endswith('.fastq.gz'):
+            sam_filename = self.read1.replace('.fastq.gz', '.sam')
+        elif self.read1.endswith('.fastq'):
+            sam_filename = self.read1.replace('.fastq', '.sam')
         else:
             print('Invalid input file')
             return None
 
-        base_fastq = os.path.basename(fastq_filename)
-        rast_id = base_fastq[:9]
-        wd = os.path.dirname(fastq_filename)
-        covstats = '{0}/{1}_covstats.txt'.format(wd, rast_id)
-        covhist = '{0}/{1}_covhist.txt'.format(wd, rast_id)
-        basecov = '{0}/{1}_basecov.txt'.format(wd, rast_id)
-        bincov = '{0}/{1}_bincov.txt'.format(wd, rast_id)
+        rast_id = os.path.basename(self.read1)[:9]
+
+        covstats = '{0}/{1}_covstats.txt'.format(self.workdir, rast_id)
+        covhist = '{0}/{1}_covhist.txt'.format(self.workdir, rast_id)
+        basecov = '{0}/{1}_basecov.txt'.format(self.workdir, rast_id)
+        bincov = '{0}/{1}_bincov.txt'.format(self.workdir, rast_id)
 
         p = subprocess.Popen('bbmap.sh in={0} '
                              'outm={1} '  # outm to only show mapped alignments
@@ -35,9 +35,9 @@ class BBMapper(object):
                              'covstats={3} '  # produce statistics
                              'covhist={4} '
                              'basecov={5} '
-                             'bincov={6}'.format(fastq_filename,
+                             'bincov={6}'.format(self.read1,
                                                  sam_filename,
-                                                 ref_db_fasta,
+                                                 self.refdb,
                                                  covstats,
                                                  covhist,
                                                  basecov,
@@ -45,7 +45,6 @@ class BBMapper(object):
                              shell=True,
                              executable="/bin/bash")
         p.wait()
-
 
     def bbmap_fast_paired(self):
         """
@@ -103,12 +102,12 @@ class BBMapper(object):
 
         p.wait()
 
-
     def run_seal(self, pergene=None):
         """
         Generate abundance measurements
         """
         print('\nRunning Seal...')
+        refnames = '' #  PEP8 compliance nonsense
         if pergene is None:
             refnames = 't'
         elif pergene is True:
@@ -127,12 +126,11 @@ class BBMapper(object):
                              'rpkm={4} '
                              'ambig=random '
                              'overwrite=true '
-                             'refnames={5}' # per ref. file instead of per target in ref. (set this to true for host DNA %)
+                             'refnames={5}'  # per ref. file instead of per target in ref. (set this to true for host DNA %)
                              ''.format(self.read1, self.read2, self.refdb, stats, rpkm, refnames),
                              shell=True,
                              executable="/bin/bash")
         p.wait()
-
 
     def __init__(self, args):
         print('\033[92m' + '\033[1m' + '\nBBMAPPER' + '\033[0m')
@@ -176,12 +174,10 @@ class BBMapper(object):
         elif self.pergene and self.seal is False:
             print('Must specify -s flag in order to use -pg flag. Quitting.')
             quit()
-        else:
-            pass
 
         # Run methods
         if self.seal and self.pergene:
-            self.run_seal(pergene = self.pergene)
+            self.run_seal(pergene=self.pergene)
         elif self.seal:
             self.run_seal()
         elif self.pairedsensitive:
@@ -217,7 +213,6 @@ if __name__ == '__main__':
                              'Very high precision and lower sensitivity BBMap search against reference DB.'
                              'For removing contaminant reads specific to a metagenome.')
 
-
     arguments = parser.parse_args()
 
     x = BBMapper(arguments)
@@ -229,10 +224,6 @@ if __name__ == '__main__':
     # Bold green time courtesy of Adam and Andrew
     print('\033[92m' + '\033[1m' + '\nFinished BBMapper functions in %d:%02d:%02d ' % (h, m, s) + '\033[0m')
 
-
-# run_seal('/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_1.filtered.fastq.gz',
-#                          '/mnt/scratch/Forest/SRA_carrot_project/metagenomes/qualimap_test/SRR3747715_2.filtered.fastq.gz',
-#                          '/mnt/scratch/Forest/SRA_carrot_project/genomes/carrot/GCF_001625215.1_ASM162521v1_genomic.fna')
 
 # AMR DB
 # '/mnt/nas/Forest/MG-RAST_Dataset_Analysis/databases/amr/amr_db_original.fasta'
