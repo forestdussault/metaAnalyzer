@@ -5,6 +5,26 @@ import glob
 import subprocess
 import shutil
 
+# Made this a static method, hopefully didn't break anything
+def run_merge(read1, read2):
+    print('Merging {} and {}...'.format(read1, read2))
+
+    # Strip pair number
+    output_filename = read1.replace('_1', '')
+
+    # Set final filename
+    output_filename = output_filename.replace('.fastq.gz', '.merged.fastq.gz')
+
+    p = subprocess.Popen('bbmerge.sh '
+                         'in1={} '
+                         'in2={} '
+                         'out={} '
+                         'overwrite=true '
+                         ''.format(read1, read2, output_filename),
+                         shell=True,
+                         executable="/bin/bash")
+    p.wait()
+    return output_filename
 
 class FastQUtils(object):
 
@@ -133,6 +153,7 @@ class FastQUtils(object):
         """
         Run FastQC on paired or single FastQ files
         """
+        unfiltered = False
         if self.num_reads == 1:
             # Nasty roundabout way to pass self attributes as default function parameters
             if read1 is None:
@@ -147,6 +168,7 @@ class FastQUtils(object):
             p.wait()
         elif self.num_reads == 2:
             if read1 is None and read2 is None:
+                unfiltered = True
                 read1 = self.fastq_filenames[0]
                 read2 = self.fastq_filenames[1]
 
@@ -170,17 +192,23 @@ class FastQUtils(object):
             os.remove(item)
 
         # Create a directory for the FastQC results
+        fastqc_foldername = ''
+        if unfiltered == True:
+            fastqc_foldername = '/FastQC_unfiltered'
+        elif unfiltered == False:
+            fastqc_foldername = '/FastQC_filtered'
+
         try:
-            os.mkdir(self.workdir + '/FastQC')
+            os.mkdir(self.workdir + fastqc_foldername)
         except OSError:
-            shutil.rmtree(self.workdir + '/FastQC')
-            os.mkdir(self.workdir + '/FastQC')
+            shutil.rmtree(self.workdir + fastqc_foldername)
+            os.mkdir(self.workdir + fastqc_foldername)
 
         # Move all _fastqc files/folders to the FastQC directory
         to_move = glob.glob(self.workdir + '/' + '*_fastqc*')
 
         for file in to_move:
-            shutil.move((self.workdir + '/' + os.path.basename(file)), self.workdir + '/FastQC/' + os.path.basename(file))
+            shutil.move((self.workdir + '/' + os.path.basename(file)), self.workdir + fastqc_foldername + '/' + os.path.basename(file))
 
     def __init__(self, args):
         print('\033[92m' + '\033[1m' + '\nFASTQ UTILS' + '\033[0m')
@@ -192,6 +220,7 @@ class FastQUtils(object):
         self.fasta = args.fasta
         self.qualitytrim = args.qualitytrim
         self.dereplicate = args.dereplicate
+        self.merge = args.merge
 
         # Metadata
         self.num_reads = len(self.fastq_filenames)
@@ -238,6 +267,9 @@ class FastQUtils(object):
         if self.fasta:
             self.fasta()
 
+        if self.merge and self.num_reads == 2:
+            run_merge(self.fastq_filenames[0], self.fastq_filenames[1])
+
 if __name__ == '__main__':
     start = time.time()
     parser = argparse.ArgumentParser()
@@ -266,6 +298,12 @@ if __name__ == '__main__':
                         help='Perform dereplication of FastQ with dedupe (BBMap). Important for metagenomic samples.'
                              'Must be run in addition to -qt flag, as this is intended '
                              'to be run post-quality trimming/filtering. ')
+    parser.add_argument('-m', '--merge',
+                        default=False,
+                        action='store_true',
+                        help='Runs bbmerge.sh against a pair of reads. '
+                             'Will merge a read pair into a single .fastq.gz file. '
+                             'Run this without any other flags.')
     arguments = parser.parse_args()
 
     x = FastQUtils(arguments)
