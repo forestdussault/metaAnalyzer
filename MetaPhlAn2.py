@@ -17,7 +17,7 @@ class MetaPhlAn2(object):
                              '/home/dussaultf/PycharmProjects/metaphlan2/metaphlan2.py '
                              '{} '
                              '--input_type fastq '
-                             '-t rel_ab_w_read_stats '  # profiling a metagenome in terms of relative abundances
+                            # '-t rel_ab_w_read_stats '  # profiling a metagenome in terms of relative abundances
                              '--nproc 8 > '  # 8 cores
                              '{}'.format(single_read, output_filename),
                              shell=True)
@@ -42,23 +42,26 @@ class MetaPhlAn2(object):
         p.wait()
         return output_file
 
-    def create_cladogram(self, species_abundance_profile):
+    def create_cladogram(self, overall_abundance_profile):
 
         # Step 1: Create GraPhlAn input files
         print("\nCreating GraPhlAn input files...")
 
-        p = subprocess.Popen('python '
+        annotated_file = overall_abundance_profile.replace('profile','profile.annot')
+
+
+        p = subprocess.Popen('python2 '
                              '/home/dussaultf/PycharmProjects/metaphlan2/utils/export2graphlan/export2graphlan.py '
                              '--skip_rows 1,2 '
                              '-i {} '
                              '--tree merged_abundance.tree.txt '
-                             '--annotation merged_abundance.annot.txt '
+                             '--annotation {} '
                              '--most_abundant 100 '
                              '--abundance_threshold 1 '
                              '--least_biomarkers 10 '
                              '--annotations 5,6 '
                              '--external_annotations 7 '
-                             '--min_clade_size 1'.format(species_abundance_profile),
+                             '--min_clade_size 1'.format(overall_abundance_profile, annotated_file),
                              shell=True,
                              cwd=self.workdir,
                              executable='/bin/bash')
@@ -66,9 +69,8 @@ class MetaPhlAn2(object):
 
         # Step 2: Create cladogram pieces
         print("\nCreating cladogram input files...")
-        annotated_file = species_abundance_profile.replace('profile','profile.annot')
 
-        p = subprocess.Popen('python '
+        p = subprocess.Popen('python2 '
                              '/home/dussaultf/PycharmProjects/graphlan/graphlan_annotate.py '
                              '--annot {} '
                              'merged_abundance.tree.txt '
@@ -80,11 +82,12 @@ class MetaPhlAn2(object):
 
         # Step 3: Visualize cladogram
         print("\nVisualizing cladogram...")
-        p = subprocess.Popen('python '
+        p = subprocess.Popen('python2 '
                              '/home/dussaultf/PycharmProjects/graphlan/graphlan.py '
                              '--dpi 300 '
                              'merged_abundance.xml '
-                             'merged_abundance.png',
+                             'merged_abundance.png '
+                             '--external_legends',
                              shell=True,
                              cwd=self.workdir,
                              executable='/bin/bash')
@@ -118,8 +121,8 @@ class MetaPhlAn2(object):
             quit()
 
         # Run GraPhlAn cladogram components
-        species_abundance_profile = self.generate_species_abundance_table(cladogram_profile)
-        self.create_cladogram(species_abundance_profile)
+        self.generate_species_abundance_table(cladogram_profile)
+        self.create_cladogram(cladogram_profile)
 
 
 if __name__ == '__main__':
