@@ -4,23 +4,94 @@ import time
 import argparse
 from FastQUtils import run_merge
 
+# TODO: Remove bad hardcoded paths to metaphlan2.py, export2graphlan.py, graphlan_annotate.py, and graphlan.py
+
 class MetaPhlAn2(object):
 
     def run_metaphlan(self, single_read):
-        output = self.workdir+'/'+os.path.basename(single_read)[:10]+'_profile.txt'
+        print('\nRunning MetaPhlAn2...')
+        output_filename = self.workdir+'/'+os.path.basename(single_read)[:10]+'_profile.txt'
 
         # This is very bad, but it works for now
-        p = subprocess.Popen('/home/dussaultf/MetaPhlAn2/bin/python ' # run through the metaphlan2 venv
+        p = subprocess.Popen('/home/dussaultf/MetaPhlAn2/bin/python '  # run through the metaphlan2 venv
                              '/home/dussaultf/PycharmProjects/metaphlan2/metaphlan2.py '
                              '{} '
                              '--input_type fastq '
-                             '--nproc 8 > ' # 8 cores
-                             '{}'.format(single_read, output),
+                             '-t rel_ab_w_read_stats '  # profiling a metagenome in terms of relative abundances
+                             '--nproc 8 > '  # 8 cores
+                             '{}'.format(single_read, output_filename),
                              shell=True)
         p.wait()
 
+        return output_filename
+
+    @staticmethod
+    def generate_species_abundance_table(overall_abundance_profile):
+        print("\nGenerating species abundance table...")
+
+        output_file = overall_abundance_profile.replace('_profile', '_species_profile')
+
+        # Pull only the species level abundances from *_profile.txt for downstream cladogram
+        p = subprocess.Popen("grep -E '(s__)| "
+                             "(^ID)' {} "
+                             "| grep -v 't__' "
+                             "| sed 's/^.*s__//g' > "
+                             "{}".format(overall_abundance_profile, output_file),
+                             shell=True,
+                             executable='/bin/bash')
+        p.wait()
+        return output_file
+
+    def create_cladogram(self, species_abundance_profile):
+
+        # Step 1: Create GraPhlAn input files
+        print("\nCreating GraPhlAn input files...")
+
+        p = subprocess.Popen('python '
+                             '/home/dussaultf/PycharmProjects/metaphlan2/utils/export2graphlan/export2graphlan.py '
+                             '--skip_rows 1,2 '
+                             '-i {} '
+                             '--tree merged_abundance.tree.txt '
+                             '--annotation merged_abundance.annot.txt '
+                             '--most_abundant 100 '
+                             '--abundance_threshold 1 '
+                             '--least_biomarkers 10 '
+                             '--annotations 5,6 '
+                             '--external_annotations 7 '
+                             '--min_clade_size 1'.format(species_abundance_profile),
+                             shell=True,
+                             cwd=self.workdir,
+                             executable='/bin/bash')
+        p.wait()
+
+        # Step 2: Create cladogram pieces
+        print("\nCreating cladogram input files...")
+        annotated_file = species_abundance_profile.replace('profile','profile.annot')
+
+        p = subprocess.Popen('python '
+                             '/home/dussaultf/PycharmProjects/graphlan/graphlan_annotate.py '
+                             '--annot {} '
+                             'merged_abundance.tree.txt '
+                             'merged_abundance.xml'.format(annotated_file),
+                             shell=True,
+                             cwd=self.workdir,
+                             executable='/bin/bash')
+        p.wait()
+
+        # Step 3: Visualize cladogram
+        print("\nVisualizing cladogram...")
+        p = subprocess.Popen('python '
+                             '/home/dussaultf/PycharmProjects/graphlan/graphlan.py '
+                             '--dpi 300 '
+                             'merged_abundance.xml '
+                             'merged_abundance.png',
+                             shell=True,
+                             cwd=self.workdir,
+                             executable='/bin/bash')
+        p.wait()
+
     def __init__(self, args):
-        print('\033[92m' + '\033[1m' + '\nMETAPHLAN2' + '\033[0m')
+        print('\033[92m' + '\033[1m' + '\nMetaPhlAn2 + GraPhlAn PIPELINE' + '\033[0m')
 
         # Arguments
         self.args = args
@@ -30,24 +101,34 @@ class MetaPhlAn2(object):
         self.num_reads = len(self.fastq_filenames)
         self.workdir = os.path.dirname(self.fastq_filenames[0])
 
+        # PEP-8 warning suppression
+        cladogram_profile = ''
+
         # Figure out reads/merging
         if self.num_reads == 2:
             self.read1 = self.fastq_filenames[0]
             self.read2 = self.fastq_filenames[1]
             output_file = run_merge(self.read1, self.read2)
-            self.run_metaphlan(output_file)
+            cladogram_profile = self.run_metaphlan(output_file)
         elif self.num_reads == 1:
             self.single_read = self.fastq_filenames[0]
-            self.run_metaphlan(self.single_read)
+            cladogram_profile = self.run_metaphlan(self.single_read)
         else:
             print('Invalid number of reads entered. Quitting.')
             quit()
+
+        # Run GraPhlAn cladogram components
+        species_abundance_profile = self.generate_species_abundance_table(cladogram_profile)
+        self.create_cladogram(species_abundance_profile)
 
 
 if __name__ == '__main__':
     start = time.time()
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='This is a wrapper for MetaPhlAn2 and GraPhlAn. This script will take '
+                                                 'single or paired reads and ultimately generate a species abundance '
+                                                 'profile as well as a cladogram figure. If a read pair is submitted, '
+                                                 'the reads will first be merged using BBmerge.')
     parser.add_argument('fastq_filenames',
                         help='Path to the FastQ file(s) you would like to perform MetaPhlAn2 analysis on. '
                              'Enter a single read to begin the MetaPhlAn2 profiling process. '
