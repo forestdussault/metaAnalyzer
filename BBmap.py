@@ -102,6 +102,10 @@ class BBMapper(object):
 
         p.wait()
 
+    def screen_host_dna(self):
+        # TODO: Remove host DNA hits derived from Seal from FastQ for downstream MetaPhlAn2 analysis
+        pass
+
     def run_seal(self, pergene=None):
         """
         Generate abundance measurements
@@ -175,6 +179,7 @@ class BBMapper(object):
             print('Must specify -s flag in order to use -pg flag. Quitting.')
             quit()
 
+
         # Run methods
         if self.seal and self.pergene:
             self.run_seal(pergene=self.pergene)
@@ -182,6 +187,7 @@ class BBMapper(object):
             self.run_seal()
         elif self.pairedsensitive:
             self.bbmap_fast_paired()
+
 
 if __name__ == '__main__':
     start = time.time()
@@ -212,6 +218,7 @@ if __name__ == '__main__':
                         help='Runs bbmap.sh against the input read(s). '
                              'Very high precision and lower sensitivity BBMap search against reference DB.'
                              'For removing contaminant reads specific to a metagenome.')
+
 
     arguments = parser.parse_args()
 
