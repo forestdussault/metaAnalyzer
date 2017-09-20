@@ -2,9 +2,47 @@ import os
 import subprocess
 import time
 import argparse
+import collections
 from FastQUtils import run_merge
 
 # TODO: Remove bad hardcoded paths to metaphlan2.py, export2graphlan.py, graphlan_annotate.py, and graphlan.py
+
+
+def generate_abundance_table(initial_profile_file, taxonomic_level):
+    """
+    Generates a tab delimited file representing relative abundances for a specific taxonomic level derived from
+    the initial metaphlan2 profile output. Specify taxonomic level of interest according to the ordered dict below.
+    """
+
+    # Ordered dictionary setup
+    taxonomic_levels = collections.OrderedDict()
+    taxonomic_levels['kingdom'] = 'k__'
+    taxonomic_levels['class'] = 'c__'
+    taxonomic_levels['order'] = 'o__'
+    taxonomic_levels['family'] = 'f__'
+    taxonomic_levels['genus'] = 'g__'
+    taxonomic_levels['species'] = 's__'
+    taxonomic_levels['strain'] = 't__'
+
+    # Ordered dict manipulation to figure out what the next key is... excessively verbose in an attempt at clarity
+    desired_tax_rank = taxonomic_levels[taxonomic_level]
+    index_tax_rank = tuple(taxonomic_levels).index(taxonomic_level)
+    tax_key_list = list(taxonomic_levels.keys())
+    next_tax_level = tax_key_list[index_tax_rank + 1]
+    next_tax_rank = taxonomic_levels[next_tax_level]
+
+    output_file = initial_profile_file.replace('_profile', '_profile_{}'.format(taxonomic_level))
+
+    p = subprocess.Popen("grep -E '({0})| "
+                         "(^ID)' {2} "
+                         "| grep -v '{1}' "
+                         "| sed 's/^.*{0}//g' > "
+                         "{3}".format(desired_tax_rank, next_tax_rank, initial_profile_file, output_file),
+                         shell=True,
+                         executable='/bin/bash')
+    p.wait()
+    return output_file
+
 
 class MetaPhlAn2(object):
 
@@ -17,7 +55,7 @@ class MetaPhlAn2(object):
                              '/home/dussaultf/PycharmProjects/metaphlan2/metaphlan2.py '
                              '{} '
                              '--input_type fastq '
-                            # '-t rel_ab_w_read_stats '  # profiling a metagenome in terms of relative abundances
+                            # '-t rel_ab_w_read_stats '  # provides rel. abundance but breaks GraPhlAn
                              '--nproc 8 > '  # 8 cores
                              '{}'.format(single_read, output_filename),
                              shell=True)
@@ -47,8 +85,7 @@ class MetaPhlAn2(object):
         # Step 1: Create GraPhlAn input files
         print("\nCreating GraPhlAn input files...")
 
-        annotated_file = overall_abundance_profile.replace('profile','profile.annot')
-
+        annotated_file = overall_abundance_profile.replace('profile', 'profile.annot')
 
         p = subprocess.Popen('python2 '
                              '/home/dussaultf/PycharmProjects/metaphlan2/utils/export2graphlan/export2graphlan.py '
@@ -117,7 +154,7 @@ class MetaPhlAn2(object):
             self.single_read = self.fastq_filenames[0]
             cladogram_profile = self.run_metaphlan(self.single_read)
         else:
-            print('Invalid number of reads entered. Quitting.')
+            print('\nInvalid number of reads entered. Quitting.')
             quit()
 
         # Run GraPhlAn cladogram components
