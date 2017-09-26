@@ -7,7 +7,7 @@ import shutil
 
 # Made this a static method, hopefully didn't break anything
 def run_merge(read1, read2):
-    print('Merging {} and {}...'.format(read1, read2))
+    print('\nMerging {} and {}...'.format(read1, read2))
 
     # Strip pair number
     output_filename = read1.replace('_1', '')
