@@ -66,23 +66,24 @@ def clean_folder(parent_folder):
             print('Deleting %s ...' % item)
 
             if os.path.isdir(parent_folder + '/' + item):
-                shutil.rmtree(parent_folder + '/' +item)
+                shutil.rmtree(parent_folder + '/' + item)
             else:
-                os.remove(parent_folder + '/' +item)
+                os.remove(parent_folder + '/' + item)
+
 
 def move_results(parent_folder, name):
     # Move files that aren't .fastq.gz or folders into a new named folder
     try:
-        print('Creating directory '+ parent_folder+'/'+name)
-        os.mkdir(parent_folder+'/'+name)
+        print('Creating directory ' + parent_folder + '/' + name)
+        os.mkdir(parent_folder + '/' + name)
     except FileExistsError:
         return None
     for item in os.listdir(parent_folder):
-        if item.endswith('.filtered.fastq.gz') or os.path.isdir(parent_folder + '/' +item):
+        if item.endswith('.filtered.fastq.gz') or os.path.isdir(parent_folder + '/' + item):
             print('Skipping %s ...' % item)
         else:
             print('Moving %s ...' % item)
-            shutil.move((parent_folder + '/' +item),(parent_folder +'/'+name + '/' +item))
+            shutil.move((parent_folder + '/' + item),(parent_folder + '/' + name + '/' + item))
 
 # for item in os.listdir('/mnt/nas/Forest/MG-RAST_Dataset_Analysis/metagenomes'):
 #     move_results('/mnt/nas/Forest/MG-RAST_Dataset_Analysis/metagenomes/' + item, 'bbmap_carbapenemase_amr_db_results')
