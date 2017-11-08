@@ -5,7 +5,7 @@ import glob
 import subprocess
 import shutil
 
-# Made this a static method, hopefully didn't break anything
+
 def run_merge(read1, read2):
     print('\nMerging {} and {}...'.format(read1, read2))
 
@@ -26,8 +26,8 @@ def run_merge(read1, read2):
     p.wait()
     return output_filename
 
-class FastQUtils(object):
 
+class FastQUtils(object):
     def quality_trim_bbduk(self):
         """
         Quality trimming with BBDuk
@@ -49,7 +49,7 @@ class FastQUtils(object):
                                  'out={1} '
                                  'qtrim=r '
                                  'trimq=20 '  # Quality-trim to Q20 using Phred algorithm with BBDuk.
-                                 'ktrim=r '  # adapter sequences sourced from /bbduk/resources/ should be trimmed from right
+                                 'ktrim=r '  # adapter sequences sourced from bbduk should be trimmed from right
                                  'ref={2}/resources/adapters.fa '  # remove adapter sequences
                                  'ktrim=r '
                                  'minlen=100 '
@@ -87,7 +87,7 @@ class FastQUtils(object):
                                  'out1={2} out2={3} '
                                  'qtrim=r '
                                  'trimq=20 '
-                                 'ktrim=r '  # adapter sequences sourced from /bbduk/resources/ should be trimmed from right
+                                 'ktrim=r '  # adapter sequences sourced from bbduk should be trimmed from right
                                  'tbo '
                                  'tpe '  # trim both read1 and read2
                                  'k=23 '
@@ -104,50 +104,77 @@ class FastQUtils(object):
             # Return the output files
             return filepath_out_r1, filepath_out_r2
 
-    @staticmethod
-    def run_dedupe(read1, read2):
+    def run_dedupe(self, read1=None, read2=None):
         """
         Run this after filtering. Deduplicates sequences. Requires lots of memory.
         http://seqanswers.com/forums/archive/index.php/t-39270.html
         """
-        print('\nRunning dedupe on {0} and {1}...\n'.format(read1, read2))
 
-        # Setup temp output
-        interleaved_out = read1.replace('.filtered', '.temp.interleaved')
+        # Single read
+        if self.num_reads == 1:
+            print('\nRunning dedupe on {0}...\n'.format(read1))
 
-        # Run dedupe
-        p = subprocess.Popen('dedupe.sh '
-                             'in1={0} '
-                             'in2={1} '
-                             'out={2} '
-                             'maxsubs=0 '
-                             'k=31 '
-                             'ac=f '
-                             'overwrite=true'.format(read1, read2, interleaved_out),
-                             shell=True,
-                             executable='/bin/bash')
-        p.wait()
+            # Setup temp output
+            interleaved_out = read1.replace('.filtered', '.temp.interleaved')
 
-        # Setup final output
-        dedupe_out_1 = read1.replace('.filtered', '.dereplicated.filtered')
-        dedupe_out_2 = read2.replace('.filtered', '.dereplicated.filtered')
+            # Run dedupe
+            p = subprocess.Popen('dedupe.sh '
+                                 'in={0} '
+                                 'out={1} '
+                                 'maxsubs=0 '
+                                 'k=31 '
+                                 'ac=f '
+                                 'overwrite=true'.format(read1, interleaved_out),
+                                 shell=True,
+                                 executable='/bin/bash')
+            p.wait()
 
-        # Deinterleave the output file
-        print('\nDeinterleaving...')
-        p2 = subprocess.Popen('reformat.sh '
-                              'in={0} '
-                              'out1={1} '
-                              'out2={2} '
-                              'overwrite=true'.format(interleaved_out, dedupe_out_1, dedupe_out_2),
-                              shell=True,
-                              executable='/bin/bash')
-        p2.wait()
+            # Setup final output
+            dedupe_out_1 = read1.replace('.filtered', '.dereplicated.filtered')
 
-        # Cleanup
-        os.remove(interleaved_out)
+            return dedupe_out_1
 
-        # Return the output filenames
-        return dedupe_out_1, dedupe_out_2
+        elif self.num_reads == 2:
+
+            print('\nRunning dedupe on {0} and {1}...\n'.format(read1, read2))
+
+            # Setup temp output
+            interleaved_out = read1.replace('.filtered', '.temp.interleaved')
+
+            # Run dedupe
+            p = subprocess.Popen('dedupe.sh '
+                                 '-Xmx16g '
+                                 'in1={0} '
+                                 'in2={1} '
+                                 'out={2} '
+                                 'maxsubs=0 '
+                                 'k=31 '
+                                 'ac=f '
+                                 'overwrite=true'.format(read1, read2, interleaved_out),
+                                 shell=True,
+                                 executable='/bin/bash')
+            p.wait()
+
+            # Setup final output
+            dedupe_out_1 = read1.replace('.filtered', '.dereplicated.filtered')
+            dedupe_out_2 = read2.replace('.filtered', '.dereplicated.filtered')
+
+            # Deinterleave the output file
+            print('\nDeinterleaving...')
+            p2 = subprocess.Popen('reformat.sh '
+                                  'in={0} '
+                                  'out1={1} '
+                                  'out2={2} '
+                                  'overwrite=true'.format(interleaved_out, dedupe_out_1, dedupe_out_2),
+                                  shell=True,
+                                  executable='/bin/bash')
+            p2.wait()
+
+            # Cleanup
+            os.remove(interleaved_out)
+
+            # Return the output filenames
+            return dedupe_out_1, dedupe_out_2
 
     def run_fastqc(self, read1=None, read2=None):
         """
@@ -192,10 +219,9 @@ class FastQUtils(object):
             os.remove(item)
 
         # Create a directory for the FastQC results
-        fastqc_foldername = ''
-        if unfiltered == True:
+        if unfiltered:
             fastqc_foldername = '/FastQC_unfiltered'
-        elif unfiltered == False:
+        else:
             fastqc_foldername = '/FastQC_filtered'
 
         try:
@@ -208,7 +234,8 @@ class FastQUtils(object):
         to_move = glob.glob(self.workdir + '/' + '*_fastqc*')
 
         for file in to_move:
-            shutil.move((self.workdir + '/' + os.path.basename(file)), self.workdir + fastqc_foldername + '/' + os.path.basename(file))
+            shutil.move((self.workdir + '/' + os.path.basename(file)), self.workdir + fastqc_foldername + '/' +
+                        os.path.basename(file))
 
     def __init__(self, args):
         print('\033[92m' + '\033[1m' + '\nFASTQ UTILS' + '\033[0m')
@@ -248,17 +275,26 @@ class FastQUtils(object):
         # -qt -dr -fc
         if self.qualitytrim and self.fastqc and self.dereplicate:
             print('\033[92m' + '\033[1m' + '\nRunning BBDuk ==> Dereplication ==> FastQC pipeline... ' + '\033[0m')
-            read1_filtered, read2_filtered = self.quality_trim_bbduk()
-            read1_deduped, read2_deduped = self.run_dedupe(read1_filtered, read2_filtered)
-            self.run_fastqc(read1=read1_deduped, read2=read2_deduped)
+
+            if self.num_reads == 2:
+                read1_filtered, read2_filtered = self.quality_trim_bbduk()
+                read1_deduped, read2_deduped = self.run_dedupe(read1_filtered, read2_filtered)
+                self.run_fastqc(read1=read1_deduped, read2=read2_deduped)
+            elif self.num_reads == 1:
+                read1_filtered = self.quality_trim_bbduk()
+                read1_deduped = self.run_dedupe(read1=read1_filtered)
+                self.run_fastqc(read1=read1_deduped)
+
         # -qt -fc
         elif self.qualitytrim and self.fastqc:
             print('\033[92m' + '\033[1m' + '\nRunning BBDuk ==> FastQC pipeline...' + '\033[0m')
             read1_filtered, read2_filtered = self.quality_trim_bbduk()
             self.run_fastqc(read1=read1_filtered, read2=read2_filtered)
+
         # -qt
         elif self.qualitytrim:
             self.quality_trim_bbduk()
+
         # -fc
         elif self.fastqc:
             self.run_fastqc()
@@ -312,5 +348,5 @@ if __name__ == '__main__':
     m, s = divmod(end - start, 60)
     h, m = divmod(m, 60)
 
-    # Bold green time courtesy of Adam and Andrew
     print('\033[92m' + '\033[1m' + '\nFinished FastQUtils functions in %d:%02d:%02d ' % (h, m, s) + '\033[0m')
+
