@@ -114,8 +114,8 @@ class FastQUtils(object):
         if self.num_reads == 1:
             print('\nRunning dedupe on {0}...\n'.format(read1))
 
-            # Setup temp output
-            interleaved_out = read1.replace('.filtered', '.temp.interleaved')
+            # Setup output
+            dedupe_out_1 = read1.replace('.filtered', '.dereplicated.filtered')
 
             # Run dedupe
             p = subprocess.Popen('dedupe.sh '
@@ -124,13 +124,10 @@ class FastQUtils(object):
                                  'maxsubs=0 '
                                  'k=31 '
                                  'ac=f '
-                                 'overwrite=true'.format(read1, interleaved_out),
+                                 'overwrite=true'.format(read1, dedupe_out_1),
                                  shell=True,
                                  executable='/bin/bash')
             p.wait()
-
-            # Setup final output
-            dedupe_out_1 = read1.replace('.filtered', '.dereplicated.filtered')
 
             return dedupe_out_1
 
