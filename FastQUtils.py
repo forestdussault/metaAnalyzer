@@ -34,17 +34,24 @@ class FastQUtils(object):
         """
         # Single read handling
         if self.num_reads == 1:
+            print('\nSINGLE READ DETECTED')
             print('\nRunning BBDuk on %s...\n' % self.fastq_filenames[0])
 
             # Filename setup
-            fastq_filename_filtered = self.fastq_filenames[0].replace('.fastq.gz', '.filtered.fastq.gz')
+            if self.fastq_filenames[0].endswith('.gz'):
+                fastq_filename_filtered = self.fastq_filenames[0].replace('.fastq.gz', '.filtered.fastq.gz')
+                filepath_out = fastq_filename_filtered
+                stats_out = filepath_out.replace('.fastq.gz', '.reference.stats.txt')
+            elif self.fastq_filenames[0].endswith('.fastq'):
+                fastq_filename_filtered = self.fastq_filenames[0].replace('.fastq', '.filtered.fastq')
+                filepath_out = fastq_filename_filtered
+                stats_out = filepath_out.replace('.fastq', '.reference.stats.txt')
+
             filepath_in = self.fastq_filenames[0]
-            filepath_out = fastq_filename_filtered
-            stats_out = filepath_out.replace('.fastq.gz', '.reference.stats.txt')
 
             # Run BBDuk
             p = subprocess.Popen('bbduk.sh '
-                                 '-Xmx1g '
+                                 '-Xmx2g '
                                  'in={0} '
                                  'out={1} '
                                  'qtrim=r '
@@ -52,9 +59,7 @@ class FastQUtils(object):
                                  'ktrim=r '  # adapter sequences sourced from bbduk should be trimmed from right
                                  'ref={2}/resources/adapters.fa '  # remove adapter sequences
                                  'ktrim=r '
-                                 'minlen=100 '
                                  'overwrite=true '
-                                 'k=23 '  # 23-mers for matching in main portion of read
                                  'tbo '  # BBDuk will internally use BBMerge to trim adapters based on read insert size
                                  'stats={3} '
                                  'threads=8'.format(filepath_in, filepath_out, self.bbduk_dir, stats_out),
@@ -62,11 +67,14 @@ class FastQUtils(object):
                                  executable='/bin/bash')
             p.wait()
 
+            return filepath_out
+
         elif self.num_reads == 2:
             # Paired read handling
             read1 = self.fastq_filenames[0]
             read2 = self.fastq_filenames[1]
 
+            print('\nPAIRED READS DETECTED')
             print('\nRunning BBDuk on the provided pair of FastQ files: '
                   '\n%s AND %s' % (read1, read2))
 
@@ -119,9 +127,11 @@ class FastQUtils(object):
 
             # Run dedupe
             p = subprocess.Popen('dedupe.sh '
+                                 '-Xmx48g '  # TODO: make this a var to pass in based on user specs 
                                  'in={0} '
                                  'out={1} '
                                  'maxsubs=0 '
+                                 'subsetcount=4 '
                                  'k=31 '
                                  'ac=f '
                                  'overwrite=true'.format(read1, dedupe_out_1),
@@ -140,11 +150,12 @@ class FastQUtils(object):
 
             # Run dedupe
             p = subprocess.Popen('dedupe.sh '
-                                 '-Xmx16g '
+                                 '-Xmx48g '
                                  'in1={0} '
                                  'in2={1} '
                                  'out={2} '
                                  'maxsubs=0 '
+                                 'subsetcount=4 '
                                  'k=31 '
                                  'ac=f '
                                  'overwrite=true'.format(read1, read2, interleaved_out),
@@ -287,6 +298,15 @@ class FastQUtils(object):
             print('\033[92m' + '\033[1m' + '\nRunning BBDuk ==> FastQC pipeline...' + '\033[0m')
             read1_filtered, read2_filtered = self.quality_trim_bbduk()
             self.run_fastqc(read1=read1_filtered, read2=read2_filtered)
+
+        # -qt -dr
+        elif self.qualitytrim and self.dereplicate:
+            if self.num_reads == 2:
+                read1_filtered, read2_filtered = self.quality_trim_bbduk()
+                read1_deduped, read2_deduped = self.run_dedupe(read1_filtered, read2_filtered)
+            elif self.num_reads == 1:
+                read1_filtered = self.quality_trim_bbduk()
+                read1_deduped = self.run_dedupe(read1=read1_filtered)
 
         # -qt
         elif self.qualitytrim:
