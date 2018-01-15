@@ -37,7 +37,12 @@ def setup_symlinks():
     dirs_to_create = []
     sym_link_refs = {}
     for dir in subdirs:
-        temp_file_list = glob(dir + '*.filtered.fastq.gz')
+        temp_file_list = glob(dir + '*.upload.filtered.fastq.gz')
+
+        for item in temp_file_list:
+            if 'dereplicated' in item:
+                temp_file_list.remove(item)
+
         if len(temp_file_list) > 0:
             sym_link_refs[temp_file_list[0]] = temp_file_list[0].replace(
                 '/bio_requests/9343/',
@@ -49,8 +54,10 @@ def setup_symlinks():
     # Create folders
     for dir in dirs_to_create:
         if not os.path.exists(dir):
-            print('mkdir ' + dir[:-38])
-            os.makedirs(dir[:-38])
+            try:
+                os.makedirs(dir[:-38])
+            except:
+                pass
 
     # Create symlinks
     for key, value in sym_link_refs.items():
@@ -89,3 +96,4 @@ def move_results(parent_folder, name):
 #     move_results('/mnt/nas/Forest/MG-RAST_Dataset_Analysis/metagenomes/' + item, 'bbmap_carbapenemase_amr_db_results')
 #
 
+# setup_symlinks()
