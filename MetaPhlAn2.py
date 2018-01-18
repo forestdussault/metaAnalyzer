@@ -48,17 +48,20 @@ class MetaPhlAn2(object):
 
     def run_metaphlan(self, single_read):
         print('\nRunning MetaPhlAn2...')
-        output_filename = self.workdir+'/'+os.path.basename(single_read)[:10]+'_profile.txt'
+        output_filename = os.path.join(self.workdir, os.path.basename(single_read).split('_')[0] + '_profile.txt')
 
         # This is very bad, but it works for now
-        p = subprocess.Popen('/home/dussaultf/MetaPhlAn2/bin/python '  # run through the metaphlan2 venv
-                             '/home/dussaultf/PycharmProjects/metaphlan2/metaphlan2.py '
-                             '{} '
-                             '--input_type fastq '
-                            # '-t rel_ab_w_read_stats '  # provides rel. abundance but breaks GraPhlAn
-                             '--nproc 8 > '  # 8 cores
-                             '{}'.format(single_read, output_filename),
-                             shell=True)
+        # '-t rel_ab_w_read_stats ' for rel abundance, but breaks graphlan
+        cmd = '/home/dussaultf/MetaPhlAn2/bin/python ' \
+              '/home/dussaultf/PycharmProjects/metaphlan2/metaphlan2.py ' \
+              '{} ' \
+              '--input_type fastq ' \
+              '--bt2_ps sensitive-local ' \
+              '--nproc 12 > ' \
+              '{}'.format(single_read, output_filename)
+        print(cmd)
+
+        p = subprocess.Popen(cmd, shell=True)
         p.wait()
 
         return output_filename
@@ -146,11 +149,13 @@ class MetaPhlAn2(object):
 
         # Figure out reads/merging
         if self.num_reads == 2:
+            print('Paired-end reads detected')
             self.read1 = self.fastq_filenames[0]
             self.read2 = self.fastq_filenames[1]
             output_file = run_merge(self.read1, self.read2)
             cladogram_profile = self.run_metaphlan(output_file)
         elif self.num_reads == 1:
+            print('Single reads detected')
             self.single_read = self.fastq_filenames[0]
             cladogram_profile = self.run_metaphlan(self.single_read)
         else:
